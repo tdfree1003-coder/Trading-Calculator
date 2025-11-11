@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Công Cụ Tính Khối Lượng Lệnh</title>
+    <style>
+        /* CSS cho Giao diện */
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f7f6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); border-radius: 8px; }
+        h1 { text-align: center; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-bottom: 20px; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .input-group input[type="number"] { width: calc(100% - 12px); padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .spread-group { display: flex; gap: 10px; }
+        .spread-group > div { flex-grow: 1; }
+        button { width: 100%; padding: 10px; background-color: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        button:hover { background-color: #2980b9; }
+        .result-box { margin-top: 25px; padding: 15px; border: 1px solid #27ae60; border-radius: 4px; background-color: #ecf8f1; }
+        .result-box div { margin-bottom: 8px; }
+        .result-box .profit { color: #27ae60; }
+        .result-box .loss { color: #e74c3c; }
+        .result-box .rr { font-weight: bold; }
+        hr { border: 0; border-top: 1px solid #eee; margin: 20px 0; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>📈 Công Cụ Tính Toán Lệnh Giao Dịch</h1>
+        
+        <div class="input-group">
+            <label for="entryPrice">1. Giá Entry:</label>
+            <input type="number" id="entryPrice" step="any" placeholder="Ví dụ: 25000" required>
+        </div>
+        <div class="input-group">
+            <label for="stopLoss">2. Giá Stoploss (SL):</label>
+            <input type="number" id="stopLoss" step="any" placeholder="Ví dụ: 24500" required>
+        </div>
+        <div class="input-group">
+            <label for="takeProfit">3. Giá Takeprofit (TP):</label>
+            <input type="number" id="takeProfit" step="any" placeholder="Ví dụ: 27000">
+        </div>
+
+        <hr>
+        <h3>4. Chi Phí (Chọn 1 loại):</h3>
+
+        <div class="input-group">
+            <label for="percentFee">Phí % (Binance, nhập 0 nếu dùng Spread):</label>
+            <input type="number" id="percentFee" step="0.001" value="0" placeholder="Ví dụ: 0.1 (tức 0.1%)">
+        </div>
+
+        <div class="spread-group">
+            <div>
+                <label for="bidPrice">Giá Bid (Exness):</label>
+                <input type="number" id="bidPrice" step="any" placeholder="Nhập để tính Spread" value="0">
+            </div>
+            <div>
+                <label for="askPrice">Giá Ask (Exness):</label>
+                <input type="number" id="askPrice" step="any" placeholder="Nhập để tính Spread" value="0">
+            </div>
+        </div>
+        
+        <hr>
+        <h3>5. Tính Khối Lượng (Chọn 1 hoặc nhập sẵn):</h3>
+
+        <div class="input-group">
+            <label for="maxRiskAmount">Rủi Ro Tối Đa ($) [Để trống nếu dùng Lãi]:</label>
+            <input type="number" id="maxRiskAmount" value="100" placeholder="Số tiền tối đa chấp nhận lỗ">
+        </div>
+
+        <div class="input-group">
+            <label for="maxProfitAmount">Lãi Mục Tiêu ($) [Để trống nếu dùng Rủi Ro]:</label>
+            <input type="number" id="maxProfitAmount" value="0" placeholder="Số tiền lãi mong muốn">
+        </div>
+
+        <div class="input-group">
+            <label for="volume">Khối Lượng Lệnh (Units - Nhập nếu muốn tính Lời/Lỗ):</label>
+            <input type="number" id="volume" step="any" placeholder="Để trống nếu muốn tính Khối Lượng">
+        </div>
+
+        <button onclick="calculateTrading()">Tính Toán</button>
+
+        <div id="result" class="result-box" style="display:none;">
+            <h2>Kết Quả:</h2>
+            <div id="feeSummary"></div>
+            <div id="spreadToPercent"></div>
+            <div id="resultVolume" class="rr"></div>
+            <div id="resultRR"></div>
+            <div id="resultLoss" class="loss"></div>
+            <div id="resultProfit" class="profit"></div>
+        </div>
+    </div>
+
+    <script>
+        function calculateTrading() {
+            // Lấy giá trị từ các trường nhập liệu
+            const maxRiskAmount = parseFloat(document.getElementById('maxRiskAmount').value) || 0;
+            const maxProfitAmount = parseFloat(document.getElementById('maxProfitAmount').value) || 0;
+            const entryPrice = parseFloat(document.getElementById('entryPrice').value);
+            const stopLoss = parseFloat(document.getElementById('stopLoss').value);
+            const takeProfit = parseFloat(document.getElementById('takeProfit').value) || 0;
+            
+            // Dữ liệu Phí
+            const percentFee = parseFloat(document.getElementById('percentFee').value) || 0; 
+            const bidPrice = parseFloat(document.getElementById('bidPrice').value) || 0;
+            const askPrice = parseFloat(document.getElementById('askPrice').value) || 0;
+            
+            let volume = parseFloat(document.getElementById('volume').value) || 0;
+
+            // Kiểm tra các giá trị cơ bản
+            if (isNaN(entryPrice) || isNaN(stopLoss) || entryPrice === stopLoss) {
+                alert("Vui lòng nhập Giá Entry và Giá Stoploss hợp lệ.");
+                return;
+            }
+
+            // --- BƯỚC 1: XÁC ĐỊNH CHI PHÍ CUỐI CÙNG TRÊN 1 ĐƠN VỊ (FINAL FEE PER UNIT) ---
+            let finalFeePerUnit = 0;
+            let feeSourceText = "";
+            let spreadToPercentText = "";
+            
+            const totalTradeValuePerUnit = entryPrice; 
+
+            if (percentFee > 0) {
+                // Ưu tiên 1: Phí % (Tính 2 lần: mở và đóng)
+                finalFeePerUnit = totalTradeValuePerUnit * (percentFee / 100) * 2;
+                feeSourceText = `Phí sử dụng (**${percentFee}% x 2** - Binance): <strong>${finalFeePerUnit.toFixed(4)}</strong> USD/Unit`;
+                
+            } else if (bidPrice !== 0 && askPrice !== 0 && bidPrice !== askPrice) {
+                // Ưu tiên 2: Spread (Tính 1 lần: Exness)
+                finalFeePerUnit = Math.abs(askPrice - bidPrice);
+                feeSourceText = `Phí được tính từ **Spread** (1 lần - Exness): <strong>${finalFeePerUnit.toFixed(4)}</strong> USD/Unit`;
+
+                // Tính Spread ra %
+                const spreadPercent = (finalFeePerUnit / entryPrice) * 100;
+                spreadToPercentText = `Spread này tương đương: <strong>${spreadPercent.toFixed(4)}%</strong>`;
+            } else {
+                finalFeePerUnit = 0;
+                feeSourceText = `**Không có phí giao dịch nào được tính.**`;
+            }
+
+            // --- BƯỚC 2: TÍNH RỦI RO, LÃI & R:R ---
+
+            const priceRisk = Math.abs(entryPrice - stopLoss);
+            const priceReward = Math.abs(takeProfit - entryPrice);
+            const totalRiskPerUnit = priceRisk + finalFeePerUnit; // Tổng chi phí lỗ trên 1 đơn vị
+            const profitPerUnit = priceReward - finalFeePerUnit; // Lãi ròng trên 1 đơn vị
+
+            let rrRatioText = "N/A";
+            if (takeProfit !== 0 && priceRisk > 0) {
+                const rrRatio = priceReward / priceRisk;
+                rrRatioText = `1 : ${rrRatio.toFixed(2)}`;
+            }
+            
+            let calculatedLoss = 0;
+            let calculatedProfit = 0;
+            let finalVolumeText = "";
+            let finalVolume = volume;
+            let modeText = "";
+
+            if (volume === 0) {
+                // Trường hợp 2: Khối Lượng CHƯA CÓ. Dùng Logic ƯU TIÊN.
+
+                if (maxProfitAmount > 0) {
+                    // Ưu tiên 1: Tính theo Lãi Mục Tiêu
+                    if (profitPerUnit <= 0) {
+                        alert("Không thể đạt Lãi Mục Tiêu. Giá TP quá gần hoặc phí quá cao.");
+                        return;
+                    }
+                    finalVolume = maxProfitAmount / profitPerUnit;
+                    modeText = `Chế độ tính: **Lãi Mục Tiêu ($${maxProfitAmount.toFixed(2)})**`;
+
+                } else if (maxRiskAmount > 0) {
+                    // Ưu tiên 2: Tính theo Rủi Ro Tối Đa
+                    if (totalRiskPerUnit <= 0) {
+                        alert("Rủi ro quá thấp (SL quá gần hoặc phí = 0). Vui lòng kiểm tra lại.");
+                        return;
+                    }
+                    finalVolume = maxRiskAmount / totalRiskPerUnit;
+                    modeText = `Chế độ tính: **Rủi Ro Tối Đa ($${maxRiskAmount.toFixed(2)})**`;
+                } else {
+                     // Không có thông số nào được nhập để tính Khối lượng
+                    alert("Vui lòng nhập Khối Lượng Lệnh, hoặc một trong hai mục tiêu (Rủi Ro/Lãi) để tính.");
+                    return;
+                }
+                
+                // Tính Lời/Lỗ dựa trên Khối lượng vừa tính
+                finalVolumeText = `Khối Lượng Cần Vào (Units): <strong>${finalVolume.toFixed(2)}</strong>`;
+                calculatedLoss = finalVolume * totalRiskPerUnit * (-1); 
+                calculatedProfit = finalVolume * profitPerUnit; 
+
+            } else {
+                // Trường hợp 3: Khối Lượng ĐÃ CÓ. Chỉ tính Lời/Lỗ.
+                
+                finalVolumeText = `Khối Lượng Đã Nhập (Units): <strong>${volume.toFixed(2)}</strong>`;
+                calculatedLoss = volume * totalRiskPerUnit * (-1); 
+                calculatedProfit = volume * profitPerUnit;
+                modeText = `Chế độ tính: **Khối Lượng Đã Nhập**`;
+            }
+
+            // --- HIỂN THỊ KẾT QUẢ ---
+            
+            document.getElementById('feeSummary').innerHTML = feeSourceText;
+            document.getElementById('spreadToPercent').innerHTML = spreadToPercentText;
+            document.getElementById('resultVolume').innerHTML = finalVolumeText + ` (${modeText})`;
+            document.getElementById('resultRR').innerHTML = `Tỷ Lệ R:R (Risk:Reward): <strong>${rrRatioText}</strong>`;
+            
+            document.getElementById('resultLoss').innerHTML = `Số Tiền Mất Tối Đa (Lỗ): <strong>$${calculatedLoss.toFixed(2)}</strong>`;
+            
+            if (takeProfit !== 0) {
+                document.getElementById('resultProfit').innerHTML = `Số Tiền Lời Tối Đa (Lãi): <strong>$${calculatedProfit.toFixed(2)}</strong>`;
+            } else {
+                document.getElementById('resultProfit').innerHTML = `Số Tiền Lời Tối Đa (Lãi): <span style="font-style: italic;">Chưa nhập Giá TP</span>`;
+            }
+
+            document.getElementById('result').style.display = 'block';
+        }
+    </script>
+
+</body>
+</html>
